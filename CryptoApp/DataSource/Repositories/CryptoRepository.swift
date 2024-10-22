@@ -73,12 +73,12 @@ final class CryptoRepository: CryptoRepositoryProtocol {
         cryptoEntity.symbol = crypto.symbol
         cryptoEntity.name = crypto.name
         cryptoEntity.imageURL = crypto.imageURL
-        cryptoEntity.currentPrice = crypto.currentPrice
-        cryptoEntity.marketCap = crypto.marketCap
-        cryptoEntity.totalVolume = crypto.totalVolume
-        cryptoEntity.high24h = crypto.high24h
-        cryptoEntity.low24h = crypto.low24h
-        cryptoEntity.priceChange24h = crypto.priceChange24h
+        cryptoEntity.currentPrice = crypto.currentPrice ?? 0
+        cryptoEntity.marketCap = crypto.marketCap ?? 0
+        cryptoEntity.totalVolume = crypto.totalVolume ?? 0
+        cryptoEntity.high24h = crypto.high24h ?? 0
+        cryptoEntity.low24h = crypto.low24h ?? 0
+        cryptoEntity.priceChange24h = crypto.priceChange24h ?? 0
         cryptoEntity.lastUpdated = crypto.lastUpdated
         cryptoEntity.isFavorite = false // Default, can be set elsewhere if needed
     }
@@ -100,7 +100,14 @@ final class CryptoRepository: CryptoRepositoryProtocol {
             lastUpdated: cryptoEntity.lastUpdated ?? Date(),
             marketCapChange24h: cryptoEntity.marketCapChange24h,
             marketCapChangePercentage24h: cryptoEntity.marketCapChangePercentage24h,
-            totalSupply: cryptoEntity.totalSupply
+            totalSupply: cryptoEntity.totalSupply,
+            maxSupply: cryptoEntity.maxSupply,
+            ath: cryptoEntity.ath,
+            athChangePercentage: cryptoEntity.athChangePercentage,
+            athDate: cryptoEntity.athDate ?? Date(),
+            atl: cryptoEntity.atl,
+            atlChangePercentage: cryptoEntity.atlChangePercentage,
+            atlDate: cryptoEntity.atlDate ?? Date()
         )
     }
 }
