@@ -22,22 +22,29 @@ final class CryptoRepository: CryptoRepositoryProtocol {
         self.coreDataStack = stack
     }
     
-    // Fetch cryptos, prioritize cached data, fall back to API if not present
+    // Fetch cryptos, prioritize API, but fall back to cached data if needed
     func fetchCryptos() async throws -> [Crypto] {
+        // Try to fetch from API first
         do {
-            // Try to load cached cryptos from Core Data
-            let cachedCryptos = try loadCachedCryptos()
-            if !cachedCryptos.isEmpty {
-                return cachedCryptos.map { mapEntityToModel($0) }
-            } else {
-                // No cached data, fetch from API
-                let cryptos = try await service.fetchCryptos()
-                await saveToCoreData(cryptos)
-                return cryptos
-            }
+            let cryptos = try await service.fetchCryptos()
+            print("✅ Successfully fetched cryptos from API.")
+            
+            // Clean up old cache
+            deleteAllCachedCryptos()
+
+            // Save fresh data to Core Data
+            await saveToCoreData(cryptos)
+            print("💾 Cached new cryptos to Core Data.")
+            return cryptos
         } catch {
-            print("Error fetching cryptos: \(error.localizedDescription)")
-            throw error
+            // If API fails, fall back to cache
+            print("⚠️ Failed to fetch cryptos from API: \(error.localizedDescription). Falling back to Core Data cache.")
+            let cachedCryptos = try loadCachedCryptos()
+            if cachedCryptos.isEmpty {
+                print("❌ No cached cryptos available.")
+                throw error
+            }
+            return cachedCryptos.map { mapEntityToModel($0) }
         }
     }
 
@@ -46,7 +53,9 @@ final class CryptoRepository: CryptoRepositoryProtocol {
     // Load cached cryptos from Core Data
     private func loadCachedCryptos() throws -> [CryptoEntity] {
         let request: NSFetchRequest<CryptoEntity> = CryptoEntity.fetchRequest()
-        return try coreDataStack.viewContext.fetch(request)
+        let cachedCryptos = try coreDataStack.viewContext.fetch(request)
+        print("💽 Loaded \(cachedCryptos.count) cached cryptos from Core Data.")
+        return cachedCryptos
     }
 
     // Save newly fetched cryptos to Core Data
@@ -59,9 +68,25 @@ final class CryptoRepository: CryptoRepositoryProtocol {
             }
             do {
                 try context.save()
+                print("✅ Successfully saved new cryptos to Core Data.")
             } catch {
-                print("Error saving to Core Data: \(error.localizedDescription)")
+                print("❌ Error saving to Core Data: \(error.localizedDescription)")
             }
+        }
+    }
+
+    // Delete all cached cryptos from Core Data
+    private func deleteAllCachedCryptos() {
+        let context = coreDataStack.viewContext
+        let fetchRequest: NSFetchRequest<NSFetchRequestResult> = CryptoEntity.fetchRequest()
+        let deleteRequest = NSBatchDeleteRequest(fetchRequest: fetchRequest)
+
+        do {
+            try context.execute(deleteRequest)
+            try context.save() // Persist the deletion
+            print("🗑️ Successfully deleted all cached cryptos from Core Data.")
+        } catch {
+            print("❌ Error deleting cached cryptos: \(error.localizedDescription)")
         }
     }
 

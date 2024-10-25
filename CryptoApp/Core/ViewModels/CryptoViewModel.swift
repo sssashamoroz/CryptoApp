@@ -24,21 +24,33 @@ class CryptoViewModel: ObservableObject {
     }
     
     
-    // Fetch Data
+    // Fetch Data on View Load
     func fetchData() async {
+        print("🔄 Starting data fetch...")
         
         state = .loading
         do {
             cryptos = try await repository.fetchCryptos()
             state = .success
+            print("✅ Data fetched successfully.")
         } catch {
             state = .error(error)
+            print("❌ Error fetching data: \(error.localizedDescription)")
         }
     }
     
-    // RefreshData (For manual updates)
+    // Refresh Data when user pulls to refresh
     func refreshData() async {
-        await fetchData()
+        print("🔄 Refreshing data manually...")
+        do {
+            // Refetch data and bypass cache
+            cryptos = try await repository.fetchCryptos()
+            state = .success
+            print("🔄 Data refreshed successfully.")
+        } catch {
+            state = .error(error)
+            print("❌ Error refreshing data: \(error.localizedDescription)")
+        }
     }
     
     // Filter for Saerch Component

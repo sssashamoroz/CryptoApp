@@ -27,12 +27,13 @@ struct MainView: View {
                         .scaleEffect(1.5, anchor: .center)
                     
                 case .success:
-                    List(viewModel.cryptos) { crypto in
-                            CryptoRowView(crypto: crypto)
-                    }
-                    .refreshable {
-                        await viewModel.refreshData()
-                    }
+                     List(viewModel.cryptos) { crypto in
+                         CryptoRowView(crypto: crypto)
+                     }
+                     .refreshable {
+                         print("🔄 User initiated refresh.")
+                         await viewModel.refreshData() 
+                     }
                     
                 case .error(let error):
                     Text("Failed to load cryptos: \(error.localizedDescription)")
