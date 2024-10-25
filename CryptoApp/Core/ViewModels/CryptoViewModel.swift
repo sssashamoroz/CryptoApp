@@ -12,11 +12,19 @@ import Combine
 @MainActor
 class CryptoViewModel: ObservableObject {
     
-    @Published var cryptos: [Crypto] = []
-    @Published var state: AppState = .loading
-    
     // The repository that will fetch data from the network or cache
     private let repository: CryptoRepositoryProtocol
+    
+    @Published var cryptos: [Crypto] = []
+    @Published var filteredCryptos: [Crypto] = [] // Filtered data for search results
+    
+    @Published var searchText: String = "" {
+        didSet {
+            search(by: searchText)
+        }
+    }
+
+    @Published var state: AppState = .loading
     
     // Dependency injection with default CryptoRepository
     init(repository: CryptoRepositoryProtocol = CryptoRepository()) {
@@ -30,7 +38,9 @@ class CryptoViewModel: ObservableObject {
         
         state = .loading
         do {
-            cryptos = try await repository.fetchCryptos()
+            cryptos = try await repository.fetchCryptos(forceRefresh: false)
+            filteredCryptos = cryptos
+            sortCryptosByMarketCapRank()
             state = .success
             print("✅ Data fetched successfully.")
         } catch {
@@ -44,7 +54,8 @@ class CryptoViewModel: ObservableObject {
         print("🔄 Refreshing data manually...")
         do {
             // Refetch data and bypass cache
-            cryptos = try await repository.fetchCryptos()
+            cryptos = try await repository.fetchCryptos(forceRefresh: true)
+            sortCryptosByMarketCapRank()
             state = .success
             print("🔄 Data refreshed successfully.")
         } catch {
@@ -53,32 +64,52 @@ class CryptoViewModel: ObservableObject {
         }
     }
     
-    // Filter for Saerch Component
-    func search(by name: String) {
-        if name.isEmpty {
-            // If search text is empty, reset to all cryptos
-            Task {
-                await fetchData()
+    // Sort cryptos by "marketCapRank" - placing nil values at the end
+    private func sortCryptosByMarketCapRank() {
+        cryptos.sort {
+            guard let rank1 = $0.marketCapRank, let rank2 = $1.marketCapRank else {
+                return $0.marketCapRank != nil
             }
+            return rank1 < rank2
+        }
+    }
+    
+    private func search(by text: String) {
+        if text.isEmpty {
+            filteredCryptos = cryptos
         } else {
-            // Filter cryptos by name
-            // Posible improvement -> Add filtering by symbol
-            
-            cryptos = cryptos.filter { crypto in
-                if let cryptoName = crypto.name?.lowercased() {
-                    return cryptoName.contains(name.lowercased())
-                } else {
-                    return false // If name is nil, we don't include it in the results
-                }
+            //Prioritize exact symbol match (case insensitive)
+            let exactSymbolMatches = cryptos.filter { crypto in
+                return crypto.symbol?.lowercased() == text.lowercased()
             }
+            
+            //Fallback to name or partial symbol match if no exact symbol matches
+            let nameOrSymbolMatches = cryptos.filter { crypto in
+                (crypto.name?.lowercased().contains(text.lowercased()) ?? false) ||
+                (crypto.symbol?.lowercased().contains(text.lowercased()) ?? false)
+            }
+            
+            // Combine results, prioritizing exact symbol matches first
+            filteredCryptos = exactSymbolMatches + nameOrSymbolMatches.filter { !exactSymbolMatches.contains($0) }
         }
     }
 }
 
 
 //Posible improvement -> Move to Enums folder
-enum AppState {
+enum AppState: Equatable {
     case loading
     case success
     case error(Error)
+
+    static func == (lhs: AppState, rhs: AppState) -> Bool {
+        switch (lhs, rhs) {
+        case (.loading, .loading), (.success, .success):
+            return true
+        case (.error(let lhsError), .error(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
+        default:
+            return false
+        }
+    }
 }

@@ -22,7 +22,7 @@ final class CryptoAPIService {
 //    }
 //    
     func fetchCryptos(limit: Int = 20) async throws -> [Crypto] {
-        
+                
         let urlString = "\(baseURL)\(currencyQuery)&per_page=\(limit)"
         
         guard let url = URL(string: urlString) else {
@@ -40,6 +40,7 @@ final class CryptoAPIService {
         // Decode the data into [Crypto] model
         do {
             let cryptos = try JSONDecoder().decode([Crypto].self, from: data)
+            print("✅ Successfully fetched and decoded cryptos from API.")
             return cryptos
         } catch let decodingError {
             print("Decoding failed with error: \(decodingError)")

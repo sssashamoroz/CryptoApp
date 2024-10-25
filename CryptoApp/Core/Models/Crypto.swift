@@ -7,8 +7,8 @@
 
 import Foundation
 
-struct Crypto: Identifiable, Codable {
-    let id: String?
+struct Crypto: Identifiable, Codable, Equatable{
+    let id: String
     let symbol: String?
     let name: String?
     let imageURL: String?
@@ -56,6 +56,8 @@ struct Crypto: Identifiable, Codable {
         case atlDate = "atl_date"
     }
     
+
+    
     
     // Initializer
     init(id: String, symbol: String, name: String, imageURL: String, marketCapRank: Double, currentPrice: Double, marketCap: Double, totalVolume: Double, high24h: Double, low24h: Double, priceChange24h: Double, lastUpdated: Date, marketCapChange24h: Double, marketCapChangePercentage24h: Double, totalSupply: Double, maxSupply: Double, ath: Double, athChangePercentage: Double, athDate: Date, atl: Double, atlChangePercentage: Double, atlDate: Date, isFavorite: Bool = false) {
@@ -90,7 +92,7 @@ struct Crypto: Identifiable, Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
         // Decode all required properties
-        id = try? container.decode(String.self, forKey: .id)
+        id = try container.decode(String.self, forKey: .id)
         symbol = try? container.decode(String.self, forKey: .symbol)
         name = try? container.decode(String.self, forKey: .name)
         imageURL = try? container.decode(String.self, forKey: .imageURL)
@@ -154,5 +156,10 @@ struct Crypto: Identifiable, Codable {
         try container.encode(isoFormatter.string(from: lastUpdated ?? Date()), forKey: .lastUpdated)
         try container.encode(isoFormatter.string(from: athDate ?? Date()), forKey: .athDate)
         try container.encode(isoFormatter.string(from: atlDate ?? Date()), forKey: .atlDate)
+    }
+    
+    // Conform to Equatable
+    static func == (lhs: Crypto, rhs: Crypto) -> Bool {
+        return lhs.id == rhs.id && lhs.symbol == rhs.symbol
     }
 }
