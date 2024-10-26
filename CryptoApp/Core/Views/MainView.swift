@@ -119,7 +119,7 @@ struct MainView: View {
                                     
                         
                                     if let lastUpdated = viewModel.lastRefresh {
-                                        Group{
+                                        
                                             Image(systemName: "arrow.clockwise")
                                                 .font(.footnote)
                                                 .bold()
@@ -129,8 +129,8 @@ struct MainView: View {
                                                 .font(.footnote)
                                                 .bold()
                                                 .foregroundColor(.gray.opacity(0.5))
-                                        }
-                                        .padding(.trailing)
+                                                .padding(.trailing)
+                                        
 
                                     }
                                 }
