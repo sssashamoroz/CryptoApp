@@ -9,8 +9,9 @@ import Foundation
 import CoreData
 
 protocol CryptoRepositoryProtocol {
-    func fetchCryptos(forceRefresh: Bool) async throws -> [Crypto]  // Accepts forceRefresh argument
-    func refreshCryptos() async throws  // Additional refresh method
+    func fetchCryptos(forceRefresh: Bool) async throws -> [Crypto]  
+    func refreshCryptos() async throws
+    func updateFavoriteStatus(for crypto: Crypto, isFavorite: Bool) async
 }
 
 final class CryptoRepository: CryptoRepositoryProtocol {
@@ -53,6 +54,24 @@ final class CryptoRepository: CryptoRepositoryProtocol {
         let cryptos = try await service.fetchCryptos()
         
         await saveOrUpdateCryptos(cryptos)
+    }
+    
+    func updateFavoriteStatus(for crypto: Crypto, isFavorite: Bool) {
+        let request: NSFetchRequest<CryptoEntity> = CryptoEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", crypto.id)
+        
+        let context = coreDataStack.viewContext
+        context.performAndWait {
+            do {
+                if let cryptoEntity = try context.fetch(request).first {
+                    cryptoEntity.isFavorite = isFavorite
+                    try context.save()
+                    print("⭐️ Favorite status updated for \(crypto.name ?? "Unknown")")
+                }
+            } catch {
+                print("❌ Failed to update favorite status: \(error)")
+            }
+        }
     }
 
     // MARK: - Private Helper Methods
@@ -114,6 +133,7 @@ final class CryptoRepository: CryptoRepositoryProtocol {
 
     // Helper function to update an existing CryptoEntity without changing isFavorite
     private func updateCryptoEntity(_ cryptoEntity: CryptoEntity, with crypto: Crypto) {
+        cryptoEntity.id = crypto.id
         cryptoEntity.symbol = crypto.symbol
         cryptoEntity.name = crypto.name
         cryptoEntity.imageURL = crypto.imageURL
@@ -124,6 +144,18 @@ final class CryptoRepository: CryptoRepositoryProtocol {
         cryptoEntity.low24h = crypto.low24h ?? 0
         cryptoEntity.priceChange24h = crypto.priceChange24h ?? 0
         cryptoEntity.lastUpdated = crypto.lastUpdated
+        cryptoEntity.marketCapRank = crypto.marketCapRank ?? 0
+        cryptoEntity.marketCapChange24h = crypto.marketCapChange24h ?? 0
+        cryptoEntity.marketCapChangePercentage24h = crypto.marketCapChangePercentage24h ?? 0
+        cryptoEntity.totalSupply = crypto.totalSupply ?? 0
+        cryptoEntity.maxSupply = crypto.maxSupply ?? 0
+        cryptoEntity.ath = crypto.ath ?? 0
+        cryptoEntity.athChangePercentage = crypto.athChangePercentage ?? 0
+        cryptoEntity.athDate = crypto.athDate
+        cryptoEntity.atl = crypto.atl ?? 0
+        cryptoEntity.atlChangePercentage = crypto.atlChangePercentage ?? 0
+        cryptoEntity.atlDate = crypto.atlDate
+        cryptoEntity.isFavorite = crypto.isFavorite
     }
 
     // MARK: - Mapping Functions
@@ -140,8 +172,19 @@ final class CryptoRepository: CryptoRepositoryProtocol {
         cryptoEntity.high24h = crypto.high24h ?? 0
         cryptoEntity.low24h = crypto.low24h ?? 0
         cryptoEntity.priceChange24h = crypto.priceChange24h ?? 0
-        cryptoEntity.lastUpdated = crypto.lastUpdated
-        cryptoEntity.isFavorite = cryptoEntity.isFavorite // Preserve isFavorite
+        cryptoEntity.lastUpdated = crypto.lastUpdated ?? "NODATE"
+        cryptoEntity.marketCapRank = crypto.marketCapRank ?? 9999
+        cryptoEntity.marketCapChange24h = crypto.marketCapChange24h ?? 0
+        cryptoEntity.marketCapChangePercentage24h = crypto.marketCapChangePercentage24h ?? 0
+        cryptoEntity.totalSupply = crypto.totalSupply ?? 0
+        cryptoEntity.maxSupply = crypto.maxSupply ?? 0
+        cryptoEntity.ath = crypto.ath ?? 0
+        cryptoEntity.athChangePercentage = crypto.athChangePercentage ?? 0
+        cryptoEntity.athDate = crypto.athDate
+        cryptoEntity.atl = crypto.atl ?? 0
+        cryptoEntity.atlChangePercentage = crypto.atlChangePercentage ?? 0
+        cryptoEntity.atlDate = crypto.atlDate
+        cryptoEntity.isFavorite = crypto.isFavorite
     }
 
     // Map Core Data entity to Crypto model
@@ -158,7 +201,7 @@ final class CryptoRepository: CryptoRepositoryProtocol {
             high24h: cryptoEntity.high24h,
             low24h: cryptoEntity.low24h,
             priceChange24h: cryptoEntity.priceChange24h,
-            lastUpdated: cryptoEntity.lastUpdated ?? Date(),
+            lastUpdated: cryptoEntity.lastUpdated ?? "NODATE",
             marketCapChange24h: cryptoEntity.marketCapChange24h,
             marketCapChangePercentage24h: cryptoEntity.marketCapChangePercentage24h,
             totalSupply: cryptoEntity.totalSupply,
@@ -169,7 +212,7 @@ final class CryptoRepository: CryptoRepositoryProtocol {
             atl: cryptoEntity.atl,
             atlChangePercentage: cryptoEntity.atlChangePercentage,
             atlDate: cryptoEntity.atlDate ?? Date(),
-            isFavorite: cryptoEntity.isFavorite // Preserve favorite status
+            isFavorite: cryptoEntity.isFavorite
         )
     }
 }

@@ -19,7 +19,7 @@ struct Crypto: Identifiable, Codable, Equatable{
     let high24h: Double?
     let low24h: Double?
     let priceChange24h: Double?
-    let lastUpdated: Date?
+    let lastUpdated: String?
     let marketCapChange24h: Double?
     let marketCapChangePercentage24h: Double?
     let totalSupply: Double?
@@ -30,7 +30,7 @@ struct Crypto: Identifiable, Codable, Equatable{
     let atl: Double?
     let atlChangePercentage: Double?
     let atlDate: Date?
-    let isFavorite: Bool = false
+    var isFavorite: Bool = false
     
     enum CodingKeys: String, CodingKey {
         case id, symbol, name
@@ -60,7 +60,7 @@ struct Crypto: Identifiable, Codable, Equatable{
     
     
     // Initializer
-    init(id: String, symbol: String, name: String, imageURL: String, marketCapRank: Double, currentPrice: Double, marketCap: Double, totalVolume: Double, high24h: Double, low24h: Double, priceChange24h: Double, lastUpdated: Date, marketCapChange24h: Double, marketCapChangePercentage24h: Double, totalSupply: Double, maxSupply: Double, ath: Double, athChangePercentage: Double, athDate: Date, atl: Double, atlChangePercentage: Double, atlDate: Date, isFavorite: Bool = false) {
+    init(id: String, symbol: String, name: String, imageURL: String, marketCapRank: Double, currentPrice: Double, marketCap: Double, totalVolume: Double, high24h: Double, low24h: Double, priceChange24h: Double, lastUpdated: String, marketCapChange24h: Double, marketCapChangePercentage24h: Double, totalSupply: Double, maxSupply: Double, ath: Double, athChangePercentage: Double, athDate: Date, atl: Double, atlChangePercentage: Double, atlDate: Date, isFavorite: Bool = false) {
         self.id = id
         self.symbol = symbol
         self.name = name
@@ -103,9 +103,7 @@ struct Crypto: Identifiable, Codable, Equatable{
         low24h = try? container.decode(Double.self, forKey: .low24h)
         priceChange24h = try? container.decode(Double.self, forKey: .priceChange24h)
         
-        // Decode `lastUpdated` as String and convert to Date
-        let lastUpdatedString = try? container.decode(String.self, forKey: .lastUpdated)
-        lastUpdated = ISO8601DateFormatter().date(from: lastUpdatedString ?? "")
+        lastUpdated = try? container.decode(String.self, forKey: .lastUpdated)
         
         // Optional properties
         marketCapRank = try? container.decode(Double.self, forKey: .marketCapRank)
@@ -153,7 +151,6 @@ struct Crypto: Identifiable, Codable, Equatable{
 
         // Encode dates
         let isoFormatter = ISO8601DateFormatter()
-        try container.encode(isoFormatter.string(from: lastUpdated ?? Date()), forKey: .lastUpdated)
         try container.encode(isoFormatter.string(from: athDate ?? Date()), forKey: .athDate)
         try container.encode(isoFormatter.string(from: atlDate ?? Date()), forKey: .atlDate)
     }
@@ -162,4 +159,5 @@ struct Crypto: Identifiable, Codable, Equatable{
     static func == (lhs: Crypto, rhs: Crypto) -> Bool {
         return lhs.id == rhs.id && lhs.symbol == rhs.symbol
     }
+    
 }

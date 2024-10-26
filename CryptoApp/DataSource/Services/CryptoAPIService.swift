@@ -41,11 +41,17 @@ final class CryptoAPIService {
         do {
             let cryptos = try JSONDecoder().decode([Crypto].self, from: data)
             print("✅ Successfully fetched and decoded cryptos from API.")
+            
+            for crypto in cryptos {
+                print("Fetched Crypto: \(crypto.id), Last Updated: \(String(describing: crypto.lastUpdated))")
+            }
             return cryptos
         } catch let decodingError {
             print("Decoding failed with error: \(decodingError)")
             throw CryptoAPIError.decodingFailed
         }
+        
+
     }
 }
 

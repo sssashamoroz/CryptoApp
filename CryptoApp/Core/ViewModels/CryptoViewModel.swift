@@ -17,6 +17,9 @@ class CryptoViewModel: ObservableObject {
     
     @Published var cryptos: [Crypto] = []
     @Published var filteredCryptos: [Crypto] = [] // Filtered data for search results
+    @Published var favorites: [Crypto] = []      // Separate favorites list
+
+    @Published var lastRefresh: Date?
     
     @Published var searchText: String = "" {
         didSet {
@@ -40,6 +43,7 @@ class CryptoViewModel: ObservableObject {
         do {
             cryptos = try await repository.fetchCryptos(forceRefresh: false)
             filteredCryptos = cryptos
+            lastRefresh = Date()
             sortCryptosByMarketCapRank()
             state = .success
             print("✅ Data fetched successfully.")
@@ -55,6 +59,7 @@ class CryptoViewModel: ObservableObject {
         do {
             // Refetch data and bypass cache
             cryptos = try await repository.fetchCryptos(forceRefresh: true)
+            lastRefresh = Date() 
             sortCryptosByMarketCapRank()
             state = .success
             print("🔄 Data refreshed successfully.")
@@ -74,7 +79,7 @@ class CryptoViewModel: ObservableObject {
         }
     }
     
-    private func search(by text: String) {
+    func search(by text: String) {
         if text.isEmpty {
             filteredCryptos = cryptos
         } else {
@@ -93,6 +98,33 @@ class CryptoViewModel: ObservableObject {
             filteredCryptos = exactSymbolMatches + nameOrSymbolMatches.filter { !exactSymbolMatches.contains($0) }
         }
     }
+    
+    
+    func toggleFavorite(for crypto: Crypto) async {
+        // Update in main cryptos array
+        if let index = cryptos.firstIndex(where: { $0.id == crypto.id }) {
+            cryptos[index].isFavorite.toggle()
+            let isFavorite = cryptos[index].isFavorite
+
+            // Update Core Data
+            await repository.updateFavoriteStatus(for: cryptos[index], isFavorite: isFavorite)
+
+            // Update favorites array
+            if isFavorite {
+                favorites.append(cryptos[index])
+            } else {
+                favorites.removeAll { $0.id == crypto.id }
+            }
+
+            // Update filteredCryptos array
+            if let filteredIndex = filteredCryptos.firstIndex(where: { $0.id == crypto.id }) {
+                filteredCryptos[filteredIndex].isFavorite = isFavorite
+            }
+        }
+    }
+    
+    
+    
 }
 
 
