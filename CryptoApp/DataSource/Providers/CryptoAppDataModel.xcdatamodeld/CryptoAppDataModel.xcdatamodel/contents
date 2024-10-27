@@ -24,5 +24,11 @@
         <attribute name="symbol" optional="YES" attributeType="String"/>
         <attribute name="totalSupply" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="totalVolume" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="favorite" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="FavoriteCrypto" inverseName="crypto" inverseEntity="FavoriteCrypto"/>
+    </entity>
+    <entity name="FavoriteCrypto" representedClassName="FavoriteCrypto" syncable="YES" codeGenerationType="class">
+        <attribute name="cryptoID" optional="YES" attributeType="String"/>
+        <attribute name="dateAdded" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="crypto" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="CryptoEntity" inverseName="favorite" inverseEntity="CryptoEntity"/>
     </entity>
 </model>

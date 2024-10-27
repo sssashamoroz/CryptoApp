@@ -28,194 +28,87 @@ struct MainView: View {
         NavigationStack {
             
             VStack {
+                Spacer()
+                    .frame(height: 20)
                 
-                TextField("Search Cryptos", text: $searchText)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.gray.opacity(0.15)))
-                    .padding(.horizontal, 20)
-                    .focused($isSearchFocused)
-                    .onChange(of: searchText) {
-                        viewModel.search(by: searchText)
+                HStack(alignment: .bottom){
+                    Text("Cryptos")
+                        .font(.title)
+                        .bold()
+                    
+                    Spacer()
+                    
+                    if !viewModel.isOnline {
+                        Text("Offline")
+                            .font(.caption)
+                            .bold()
+                            .padding(5)
+                            .background(Color.red.opacity(0.8))
+                            .foregroundColor(.white)
+                            .clipShape(Capsule())
+                            .transition(.opacity)
                     }
-                    .onChange(of: isSearchFocused) {
-                        withAnimation{
-                            isSearchActive = isSearchFocused
-                        }
-                    }
+                }
+                .padding(.horizontal, 20)
+
                 
-                if isSearchActive {
-                    switch viewModel.state {
-                    case .loading:
-                        ScrollView {
-                            LazyVStack(spacing:5) {
-                                ForEach(0..<10) { _ in
-                                    CryptoRowView(crypto: placeholderCrypto)
-                                        .redacted(reason: .placeholder)
-                                        .opacity(shimmer ? 0.3 : 1.0) // Shimmering effect
-                                }
-                            }
-                            .onAppear {
-                                // Trigger shimmer animation
-                                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                                    shimmer.toggle()
-                                }
-                            }
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search Cryptos", text: $searchText)
+                        .focused($isSearchFocused)
+                        .onChange(of: searchText) {
+                            viewModel.searchText = searchText
                         }
-                        
-                    case .success:
-                        ScrollView {
-                            LazyVStack {
-                                ForEach(viewModel.filteredCryptos) { crypto in
-                                    NavigationLink(destination: {
-                                        if let index = viewModel.filteredCryptos.firstIndex(where: { $0.id == crypto.id }) {
-                                            DetailsCryptoView(crypto: $viewModel.filteredCryptos[index], animation: animation)
-                                                .navigationTransition(.zoom(sourceID: crypto.id, in: animation))
-                                        }
-                                    }) {
-                                        CryptoRowView(crypto: crypto)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                    .matchedTransitionSource(id: crypto.id, in: animation)
-                                }
-                            }
-                        }
-                        .refreshable {
-                            await viewModel.refreshData()
-                        }
-                        .padding(.horizontal, 10)
-                        .mask(
-                            LinearGradient(
-                                gradient: Gradient(stops: [
-                                    .init(color: .clear, location: 0),
-                                    .init(color: .black.opacity(1), location: 0.03),
-                                    .init(color: .black, location: 0.5),
-                                    .init(color: .black.opacity(0.8), location: 0.9),
-                                    .init(color: .clear, location: 1)
-                                ]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        
-                        
-                    case .error(let error):
-                        Text("Failed to load cryptos: \(error.localizedDescription)")
-                            .foregroundColor(.red)
-                            .padding()
-                    }
-                } else {
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(.gray.opacity(0.15)))
+                .padding(.horizontal, 20)
+                
+                switch viewModel.state {
+                case .loading:
                     ScrollView {
-                        if !viewModel.favorites.isEmpty {
-                            LazyVStack(alignment: .leading) {
-                                
-                                HStack(alignment: .bottom){
-                                    Text("Favorites")
-                                        .font(.title2).bold()
-                                        .padding(.leading)
-                                    
-                                    Spacer()
-                                    
-                        
-                                    if let lastUpdated = viewModel.lastRefresh {
-                                        
-                                            Image(systemName: "arrow.clockwise")
-                                                .font(.footnote)
-                                                .bold()
-                                                .foregroundColor(.gray.opacity(0.5))
-                                            
-                                            Text(formatLastUpdatedDate(lastUpdated))
-                                                .font(.footnote)
-                                                .bold()
-                                                .foregroundColor(.gray.opacity(0.5))
-                                                .padding(.trailing)
-                                        
-
-                                    }
-                                }
-
-                                
-                                LazyVStack {
-                                    ForEach(viewModel.favorites) { crypto in
-                                        NavigationLink(destination: {
-                                            if let index = viewModel.cryptos.firstIndex(where: { $0.id == crypto.id }) {
-                                                DetailsCryptoView(crypto: $viewModel.cryptos[index], animation: animation)
-                                                    .navigationTransition(.zoom(sourceID: crypto.id, in: animation))
-                                            }
-                                        }) {
-                                            CryptoRowView(crypto: crypto)
-                                        }
-                                        .buttonStyle(PlainButtonStyle())
-                                        .matchedTransitionSource(id: crypto.id, in: animation)
-                                    }
-                                }
-                                .padding(.bottom, 10)
+                        LazyVStack(spacing:5) {
+                            ForEach(0..<10) { _ in
+                                CryptoRowView(crypto: placeholderCrypto)
+                                    .redacted(reason: .placeholder)
+                                    .opacity(shimmer ? 0.3 : 1.0) // Shimmering effect
                             }
-                        } else {
-                            // Display a placeholder if no favorites
-                            ZStack {
-                                VStack(alignment: .leading) {
-                                    
-                                    HStack{
-                                        Text("Favorites")
-                                            .font(.title2).bold()
-                                            .padding(.leading)
-                        
-                                    }
-
-                                    
-                                    // Display redacted CryptoRowView items in a LazyVStack
-                                    LazyVStack(spacing: -13){
-                                        ForEach(0..<4) { _ in
-                                            CryptoRowView(crypto: placeholderCrypto) // Redacted CryptoRowView
-                                                .redacted(reason: .placeholder)
-                                                .opacity(0.3)
-                                        }
-                                    }
-                                    .mask(
-                                        LinearGradient(
-                                            gradient: Gradient(stops: [
-                                                .init(color: .clear, location: 0),
-                                                .init(color: .black.opacity(1), location: 0.03),
-                                                .init(color: .black, location: 0.5),
-                                                .init(color: .clear, location: 1)
-                                            ]),
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        )
-                                    )
-                                    .padding(.horizontal)
-                                    .padding(.bottom, 10)
-                                }
-                                
-                                // Overlay message
-                                VStack {
-                                    Text("No favorites added yet 😞")
-                                        .foregroundColor(.gray)
-                                        .font(.headline)
-                                    
-                                    Text("Search for a crypto to add it to your favorites") .foregroundColor(.gray)
-                                        .multilineTextAlignment(.center)
-                                        .font(.subheadline)
-                                        .padding(.horizontal)
-                                }
-                                .padding()
-                                .background(
-                                    Capsule()
-                                        .foregroundColor(colorScheme == .light ? .white : .black)
-                                        .blur(radius: 10)
-                                )
+                        }
+                        .onAppear {
+                            // Trigger shimmer animation
+                            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                                shimmer.toggle()
                             }
-                            .padding(.vertical, 10)
-
- 
                         }
                     }
-                    .refreshable {
-                        await viewModel.refreshData()
+                    
+                case .success:
+                    ScrollView {
+                        LazyVStack {
+                            ForEach(viewModel.filteredCryptos) { crypto in
+                                NavigationLink(destination: {
+                                    if let index = viewModel.filteredCryptos.firstIndex(where: { $0.id == crypto.id }) {
+                                        DetailsCryptoView(crypto: $viewModel.filteredCryptos[index], animation: animation)
+                                            .navigationTransition(.zoom(sourceID: crypto.id, in: animation))
+                                    }
+                                }) {
+                                    CryptoRowView(crypto: crypto)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .matchedTransitionSource(id: crypto.id, in: animation)
+                            }
+                        }
                     }
                     .safeAreaPadding(.top, 10)
+                    .safeAreaPadding(.bottom, 30)
+                    .refreshable {
+                        if viewModel.isOnline {
+                            await viewModel.refreshData()
+                        }
+                    }
                     .padding(.horizontal, 10)
                     .mask(
                         LinearGradient(
@@ -230,14 +123,22 @@ struct MainView: View {
                             endPoint: .bottom
                         )
                     )
-                    .transition(.opacity)
+                    
+                    
+                case .error(let error):
+                    Text("Failed to load cryptos: \(error.localizedDescription)")
+                        .foregroundColor(.red)
+                        .padding()
                 }
             }
-            .navigationTitle("Cryptos")
             .task(id: viewModel.state) {
                 if case .loading = viewModel.state {
                     await viewModel.fetchData()
+
                 }
+            }
+            .onAppear {
+                viewModel.filterCryptos()
             }
         }
 

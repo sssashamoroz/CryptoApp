@@ -8,13 +8,7 @@
 import Foundation
 import CoreData
 
-protocol CryptoRepositoryProtocol {
-    func fetchCryptos(forceRefresh: Bool) async throws -> [Crypto]  
-    func refreshCryptos() async throws
-    func updateFavoriteStatus(for crypto: Crypto, isFavorite: Bool) async
-}
-
-final class CryptoRepository: CryptoRepositoryProtocol {
+final class CryptoRepository {
     
     private let service: CryptoAPIService
     private let coreDataStack: CoreDataStack
@@ -26,108 +20,85 @@ final class CryptoRepository: CryptoRepositoryProtocol {
     
     // Fetch cryptos from API or cache
     func fetchCryptos(forceRefresh: Bool = false) async throws -> [Crypto] {
-        // If we're forcing refresh, go straight to API
         if forceRefresh {
-            print("🌐 Fetching cryptos from API (forced refresh)...")
             let cryptos = try await service.fetchCryptos()
             await saveOrUpdateCryptos(cryptos)
             return cryptos
         }
 
-        // Otherwise, check cache first
         let cachedCryptos = try loadCachedCryptos()
-        
-        if !cachedCryptos.isEmpty {
-            print("💽 Loaded \(cachedCryptos.count) cached cryptos from Core Data.")
-            return cachedCryptos.map { mapEntityToModel($0) }
-        } else {
-            print("🌐 No cached data. Fetching cryptos from API...")
-            let cryptos = try await service.fetchCryptos()
-            await saveOrUpdateCryptos(cryptos)
-            return cryptos
-        }
+        return cachedCryptos.isEmpty ? try await refreshCryptos() : cachedCryptos.map { mapEntityToModel($0) }
     }
     
-    // Refresh cryptos (updating or inserting instead of deleting)
-    func refreshCryptos() async throws {
-        print("🌐 Fetching cryptos from API for refresh...")
+    // Refresh cryptos by fetching from API and saving to Core Data
+    func refreshCryptos() async throws -> [Crypto] {
         let cryptos = try await service.fetchCryptos()
-        
         await saveOrUpdateCryptos(cryptos)
+        return cryptos
     }
-    
-    func updateFavoriteStatus(for crypto: Crypto, isFavorite: Bool) {
-        let request: NSFetchRequest<CryptoEntity> = CryptoEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", crypto.id)
-        
+
+    // Toggle favorite status by adding or removing FavoriteCrypto entity
+    func toggleFavoriteStatus(for cryptoID: String) async {
         let context = coreDataStack.viewContext
+        let request: NSFetchRequest<FavoriteCrypto> = FavoriteCrypto.fetchRequest()
+        request.predicate = NSPredicate(format: "crypto.id == %@", cryptoID)
+
         context.performAndWait {
             do {
-                if let cryptoEntity = try context.fetch(request).first {
-                    cryptoEntity.isFavorite = isFavorite
-                    try context.save()
-                    print("⭐️ Favorite status updated for \(crypto.name ?? "Unknown")")
+                if let favorite = try context.fetch(request).first {
+                    context.delete(favorite) // Remove favorite if it exists
+                } else if let cryptoEntity = fetchCryptoEntity(for: cryptoID) {
+                    let newFavorite = FavoriteCrypto(context: context)
+                    newFavorite.crypto = cryptoEntity
+                    newFavorite.dateAdded = Date()
                 }
+                try context.save()
             } catch {
-                print("❌ Failed to update favorite status: \(error)")
+                print("Failed to toggle favorite status: \(error)")
             }
         }
+    }
+
+    // Fetch all favorite crypto IDs from FavoriteCrypto entities, sorted by dateAdded
+    func fetchFavorites() async -> [String] {
+        let request: NSFetchRequest<FavoriteCrypto> = FavoriteCrypto.fetchRequest()
+        
+        // Sort by dateAdded in descending order (newest first)
+        request.sortDescriptors = [NSSortDescriptor(key: "dateAdded", ascending: false)]
+        
+        let favorites = (try? coreDataStack.viewContext.fetch(request)) ?? []
+        
+        // Map to crypto IDs
+        return favorites.compactMap { $0.crypto?.id }
     }
 
     // MARK: - Private Helper Methods
 
-    // Load cached cryptos from Core Data
-    private func loadCachedCryptos() throws -> [CryptoEntity] {
+    private func fetchCryptoEntity(for cryptoID: String) -> CryptoEntity? {
         let request: NSFetchRequest<CryptoEntity> = CryptoEntity.fetchRequest()
-        let cachedCryptos = try coreDataStack.viewContext.fetch(request)
-        print("💽 Loaded \(cachedCryptos.count) cached cryptos from Core Data.")
-        return cachedCryptos
+        request.predicate = NSPredicate(format: "id == %@", cryptoID)
+        return (try? coreDataStack.viewContext.fetch(request))?.first
     }
 
-    // Save or update cryptos in Core Data, preserving "isFavorite"
+    private func loadCachedCryptos() throws -> [CryptoEntity] {
+        let request: NSFetchRequest<CryptoEntity> = CryptoEntity.fetchRequest()
+        return try coreDataStack.viewContext.fetch(request)
+    }
+
     private func saveOrUpdateCryptos(_ cryptos: [Crypto]) async {
         let context = coreDataStack.viewContext
-        
-        //Fetch existing cryptos from Core Data
-        let existingCryptos = loadExistingCryptos()
-        let existingCryptoMap = Dictionary(uniqueKeysWithValues: existingCryptos.map { ($0.id ?? "", $0) })
-        
-        // Counters to track the number of updates and additions
-        var updatedCount = 0
-        var addedCount = 0
-        
-        //Loop through the new cryptos and update or - insert (in case of new ones)
+        let existingCryptoMap = Dictionary(uniqueKeysWithValues: (try? loadCachedCryptos().map { ($0.id ?? "", $0) }) ?? [])
+
         await context.perform {
             for crypto in cryptos {
                 if let existingCrypto = existingCryptoMap[crypto.id] {
                     self.updateCryptoEntity(existingCrypto, with: crypto)
-                    updatedCount += 1
                 } else {
-                    //Insert new crypto
                     let newCryptoEntity = CryptoEntity(context: context)
                     self.mapModelToEntity(crypto, newCryptoEntity)
-                    addedCount += 1
                 }
             }
-            
-            // Step 5: Save context
-            do {
-                try context.save()
-                print("✅ Successfully updated Core Data. \(updatedCount) cryptos updated, \(addedCount) cryptos added.")
-            } catch {
-                print("❌ Error saving to Core Data: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    // Helper function to load all existing cryptos from Core Data
-    private func loadExistingCryptos() -> [CryptoEntity] {
-        let request: NSFetchRequest<CryptoEntity> = CryptoEntity.fetchRequest()
-        do {
-            return try coreDataStack.viewContext.fetch(request)
-        } catch {
-            print("❌ Failed to fetch existing cryptos: \(error.localizedDescription)")
-            return []
+            try? context.save()
         }
     }
 

@@ -41,7 +41,6 @@ extension CoreDataStack {
         }
     }
 
-    // Generic fetch method with predicate for filtering
     func fetchEntities<T: NSManagedObject>(_ entity: T.Type, predicate: NSPredicate? = nil) -> [T] {
         let request = T.fetchRequest()
         request.predicate = predicate
@@ -52,5 +51,9 @@ extension CoreDataStack {
             print("Fetch failed with error: \(error)")
             return []
         }
+    }
+    
+    func fetchFavoriteCryptoEntities() -> [FavoriteCrypto] {
+        return fetchEntities(FavoriteCrypto.self)
     }
 }

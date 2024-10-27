@@ -6,134 +6,140 @@
 //
 
 import Foundation
+import SwiftUI
+import Network
 import Combine
-
 
 @MainActor
 class CryptoViewModel: ObservableObject {
     
-    // The repository that will fetch data from the network or cache
-    private let repository: CryptoRepositoryProtocol
+    private let repository: CryptoRepository
     
-    @Published var cryptos: [Crypto] = []
-    @Published var filteredCryptos: [Crypto] = [] // Filtered data for search results
-    @Published var favorites: [Crypto] = []      // Separate favorites list
-
+    @Published var cryptos: [Crypto] = [] // Main data array
+    @Published var filteredCryptos: [Crypto] = [] // Filtered data for search results and favorites display
     @Published var lastRefresh: Date?
+    private var favoriteIDs: [String] = []
+    
+    
+    //Network
+    private let networkMonitor = NWPathMonitor() // Network monitoring
+    private let queue = DispatchQueue(label: "NetworkMonitor") // Queue for network monitoring
+    @Published var isOnline: Bool = true
+        
+    
     
     @Published var searchText: String = "" {
         didSet {
-            search(by: searchText)
+            filterCryptos()
         }
     }
-
+    
     @Published var state: AppState = .loading
     
-    // Dependency injection with default CryptoRepository
-    init(repository: CryptoRepositoryProtocol = CryptoRepository()) {
+    init(repository: CryptoRepository = CryptoRepository()) {
         self.repository = repository
+        setupNetworkMonitoring() // Start monitoring
     }
     
+    private func setupNetworkMonitoring() {
+        networkMonitor.pathUpdateHandler = { path in
+            Task { @MainActor in
+                withAnimation{
+                    self.isOnline = path.status == .satisfied
+                }
+            }
+        }
+        networkMonitor.start(queue: queue)
+    }
     
-    // Fetch Data on View Load
+    // Fetch Data on View Load, including favorites
     func fetchData() async {
-        print("🔄 Starting data fetch...")
-        
         state = .loading
         do {
             cryptos = try await repository.fetchCryptos(forceRefresh: false)
-            filteredCryptos = cryptos
+            favoriteIDs = await repository.fetchFavorites() // Fetch favorite IDs
+            
+            updateFavoriteStatus()
+            
             lastRefresh = Date()
-            sortCryptosByMarketCapRank()
+            filterCryptos()
             state = .success
-            print("✅ Data fetched successfully.")
         } catch {
             state = .error(error)
-            print("❌ Error fetching data: \(error.localizedDescription)")
         }
     }
     
-    // Refresh Data when user pulls to refresh
+    // Refresh Data
     func refreshData() async {
-        print("🔄 Refreshing data manually...")
         do {
-            // Refetch data and bypass cache
-            cryptos = try await repository.fetchCryptos(forceRefresh: true)
-            lastRefresh = Date() 
-            sortCryptosByMarketCapRank()
+            cryptos = try await repository.refreshCryptos()
+            favoriteIDs = await repository.fetchFavorites()
+            updateFavoriteStatus()
+            lastRefresh = Date()
+            filterCryptos()
             state = .success
-            print("🔄 Data refreshed successfully.")
         } catch {
             state = .error(error)
-            print("❌ Error refreshing data: \(error.localizedDescription)")
         }
     }
     
-    // Sort cryptos by "marketCapRank" - placing nil values at the end
-    private func sortCryptosByMarketCapRank() {
-        cryptos.sort {
-            guard let rank1 = $0.marketCapRank, let rank2 = $1.marketCapRank else {
-                return $0.marketCapRank != nil
+    func filterCryptos() {
+        if searchText.isEmpty {
+            // Show favorites at the top, sorted by market cap rank
+            filteredCryptos = cryptos.sorted { lhs, rhs in
+                let lhsIsFavorite = favoriteIDs.contains(lhs.id)
+                let rhsIsFavorite = favoriteIDs.contains(rhs.id)
+                
+                if lhsIsFavorite != rhsIsFavorite {
+                    return lhsIsFavorite && !rhsIsFavorite
+                } else {
+                    // Sort by market cap rank if both are favorites or both are non-favorites
+                    return (lhs.marketCapRank ?? Double(Int.max)) < (rhs.marketCapRank ?? Double(Int.max))
+                }
             }
-            return rank1 < rank2
-        }
-    }
-    
-    func search(by text: String) {
-        if text.isEmpty {
-            filteredCryptos = cryptos
         } else {
-            //Prioritize exact symbol match (case insensitive)
-            let exactSymbolMatches = cryptos.filter { crypto in
-                return crypto.symbol?.lowercased() == text.lowercased()
+            // Filter based on search text and prioritize favorites, then market cap rank
+            let matches = cryptos.filter {
+                ($0.name?.lowercased().contains(searchText.lowercased()) ?? false) ||
+                ($0.symbol?.lowercased().contains(searchText.lowercased()) ?? false)
             }
-            
-            //Fallback to name or partial symbol match if no exact symbol matches
-            let nameOrSymbolMatches = cryptos.filter { crypto in
-                (crypto.name?.lowercased().contains(text.lowercased()) ?? false) ||
-                (crypto.symbol?.lowercased().contains(text.lowercased()) ?? false)
+            filteredCryptos = matches.sorted { lhs, rhs in
+                let lhsIsFavorite = favoriteIDs.contains(lhs.id)
+                let rhsIsFavorite = favoriteIDs.contains(rhs.id)
+                
+                if lhsIsFavorite != rhsIsFavorite {
+                    return lhsIsFavorite && !rhsIsFavorite
+                } else {
+                    return (lhs.marketCapRank ?? Double(Int.max)) < (rhs.marketCapRank ?? Double(Int.max))
+                }
             }
-            
-            // Combine results, prioritizing exact symbol matches first
-            filteredCryptos = exactSymbolMatches + nameOrSymbolMatches.filter { !exactSymbolMatches.contains($0) }
         }
     }
     
+    // Update cryptos to mark favorites in the list
+    private func updateFavoriteStatus() {
+        cryptos = cryptos.map { crypto in
+            var updatedCrypto = crypto
+            updatedCrypto.isFavorite = favoriteIDs.contains(crypto.id)
+            return updatedCrypto
+        }
+    }
     
+    // Toggle favorite status for a specific crypto
     func toggleFavorite(for crypto: Crypto) async {
-        // Update in main cryptos array
-        if let index = cryptos.firstIndex(where: { $0.id == crypto.id }) {
-            cryptos[index].isFavorite.toggle()
-            let isFavorite = cryptos[index].isFavorite
-
-            // Update Core Data
-            await repository.updateFavoriteStatus(for: cryptos[index], isFavorite: isFavorite)
-
-            // Update favorites array
-            if isFavorite {
-                favorites.append(cryptos[index])
-            } else {
-                favorites.removeAll { $0.id == crypto.id }
-            }
-
-            // Update filteredCryptos array
-            if let filteredIndex = filteredCryptos.firstIndex(where: { $0.id == crypto.id }) {
-                filteredCryptos[filteredIndex].isFavorite = isFavorite
-            }
-        }
+        await repository.toggleFavoriteStatus(for: crypto.id)
+        favoriteIDs = await repository.fetchFavorites()
+        updateFavoriteStatus()
+        filterCryptos()
     }
-    
-    
-    
 }
-
 
 //Posible improvement -> Move to Enums folder
 enum AppState: Equatable {
     case loading
     case success
     case error(Error)
-
+    
     static func == (lhs: AppState, rhs: AppState) -> Bool {
         switch (lhs, rhs) {
         case (.loading, .loading), (.success, .success):
