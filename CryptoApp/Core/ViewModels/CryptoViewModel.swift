@@ -20,7 +20,6 @@ class CryptoViewModel: ObservableObject {
     @Published var lastRefresh: Date?
     private var favoriteIDs: [String] = []
     
-    
     //Network
     private let networkMonitor = NWPathMonitor() // Network monitoring
     private let queue = DispatchQueue(label: "NetworkMonitor") // Queue for network monitoring

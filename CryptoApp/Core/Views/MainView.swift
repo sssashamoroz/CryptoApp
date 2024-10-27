@@ -38,16 +38,35 @@ struct MainView: View {
                     
                     Spacer()
                     
-                    if !viewModel.isOnline {
-                        Text("Offline")
-                            .font(.caption)
+                    
+                    HStack{
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.caption2)
                             .bold()
-                            .padding(5)
-                            .background(Color.red.opacity(0.8))
-                            .foregroundColor(.white)
-                            .clipShape(Capsule())
-                            .transition(.opacity)
+                            .foregroundColor(.gray)
+                        
+                        Text("\(formattedLastRefresh)")
+                             .font(.caption)
+                             .bold()
+                             .foregroundColor(.gray)
                     }
+                    
+                    if !viewModel.isOnline {
+                        HStack{
+                            Text("Offline")
+                                .font(.caption)
+                                .bold()
+                                .foregroundColor(.gray)
+                                .transition(.opacity)
+                            
+                            Circle()
+                                .fill(Color.red.opacity(0.8))
+                                .frame(width: 5)
+                                .offset(x: -5, y: -2)
+                        }
+                    }
+    
+
                 }
                 .padding(.horizontal, 20)
 
@@ -72,7 +91,7 @@ struct MainView: View {
                     ScrollView {
                         LazyVStack(spacing:5) {
                             ForEach(0..<10) { _ in
-                                CryptoRowView(crypto: placeholderCrypto)
+                                CryptoRowView(crypto: $placeholderCrypto)
                                     .redacted(reason: .placeholder)
                                     .opacity(shimmer ? 0.3 : 1.0) // Shimmering effect
                             }
@@ -95,7 +114,9 @@ struct MainView: View {
                                             .navigationTransition(.zoom(sourceID: crypto.id, in: animation))
                                     }
                                 }) {
-                                    CryptoRowView(crypto: crypto)
+                                    if let index = viewModel.filteredCryptos.firstIndex(where: { $0.id == crypto.id }) {
+                                        CryptoRowView(crypto:  $viewModel.filteredCryptos[index])
+                                    }
                                 }
                                 .buttonStyle(PlainButtonStyle())
                                 .matchedTransitionSource(id: crypto.id, in: animation)
@@ -144,49 +165,42 @@ struct MainView: View {
 
     }
     
-    func formatLastUpdatedDate(_ date: Date?) -> String {
-        guard let date = date else { return "N/A" }
+    var formattedLastRefresh: String {
+        guard let lastRefresh = viewModel.lastRefresh else { return "N/A" }
         
         let formatter = DateFormatter()
-        formatter.locale = Locale.current // Uses device's locale
-        let calendar = Calendar.current
-        
-        if calendar.isDateInToday(date) {
-            // If the date is today, display "Today, HH:mm"
-            formatter.dateFormat = "HH:mm"
-            return "Today, \(formatter.string(from: date))"
-        } else {
-            // If not today, display "dd MMM, HH:mm"
-            formatter.dateFormat = "dd MMM, HH:mm"
-            return formatter.string(from: date)
-        }
+        formatter.locale = Locale.current
+        formatter.dateFormat = "dd MMM, HH:mm"
+        return formatter.string(from: lastRefresh)
     }
+    
+    @State var placeholderCrypto = Crypto(
+        id: "placeholder",
+        symbol: "BTC",
+        name: "Placeholder",
+        imageURL: "https://coin-images.coingecko.com/coins/images/325/large/Tether.png?1696501661",
+        marketCapRank: 1,
+        currentPrice: 67342,
+        marketCap: 1331206384537,
+        totalVolume: 36770950539,
+        high24h: 67941,
+        low24h: 66669,
+        priceChange24h: -238.77,
+        lastUpdated: "2024-10-26T02:27:56.575Z",
+        marketCapChange24h: -4781756194.04,
+        marketCapChangePercentage24h: -0.35,
+        totalSupply: 21000000.0,
+        maxSupply: 21000000.0,
+        ath: 73738.0,
+        athChangePercentage: -8.6,
+        athDate: Date(),
+        atl: 67.81,
+        atlChangePercentage: 99197.47,
+        atlDate: Date()
+    )
 }
 
-let placeholderCrypto = Crypto(
-    id: "placeholder",
-    symbol: "BTC",
-    name: "Placeholder",
-    imageURL: "https://coin-images.coingecko.com/coins/images/325/large/Tether.png?1696501661",
-    marketCapRank: 1,
-    currentPrice: 67342,
-    marketCap: 1331206384537,
-    totalVolume: 36770950539,
-    high24h: 67941,
-    low24h: 66669,
-    priceChange24h: -238.77,
-    lastUpdated: "2024-10-26T02:27:56.575Z",
-    marketCapChange24h: -4781756194.04,
-    marketCapChangePercentage24h: -0.35,
-    totalSupply: 21000000.0,
-    maxSupply: 21000000.0,
-    ath: 73738.0,
-    athChangePercentage: -8.6,
-    athDate: Date(),
-    atl: 67.81,
-    atlChangePercentage: 99197.47,
-    atlDate: Date()
-)
+
 
 #Preview {
     
