@@ -75,11 +75,9 @@ struct MainView: View {
                 HStack {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
-                    TextField("Search Cryptos", text: $searchText)
+                    TextField("Search Cryptos", text: $viewModel.searchText)
                         .focused($isSearchFocused)
-                        .onChange(of: searchText) {
-                            viewModel.searchText = searchText
-                        }
+                        .accentColor(.pink)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 10)
@@ -161,6 +159,7 @@ struct MainView: View {
             }
             .onAppear {
                 viewModel.filterCryptos()
+                viewModel.resetSearchText()
             }
         }
 

@@ -148,7 +148,7 @@ struct DetailsCryptoView: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 23, height: 23)
-                                .foregroundColor(isFavorite ? .pink : .gray.opacity(0.3))
+                                .foregroundColor(crypto.isFavorite ? .pink : .gray.opacity(0.3))
                                 .font(.headline)
                                 .padding()
                                 .rotationEffect(.degrees(isAnimatingHeart ? 15 : 0))
@@ -385,7 +385,7 @@ struct DetailsCryptoView: View {
         .padding(.horizontal, 30)
         .navigationBarHidden(true)
         .onAppear{
-            isFavorite = crypto.isFavorite
+            //isFavorite = crypto.isFavorite
         }
     }
     

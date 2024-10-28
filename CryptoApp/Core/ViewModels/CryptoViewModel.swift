@@ -51,6 +51,10 @@ class CryptoViewModel: ObservableObject {
         networkMonitor.start(queue: queue)
     }
     
+    func resetSearchText() {
+        searchText = ""
+    }
+    
     // Fetch Data on View Load, including favorites
     func fetchData() async {
         state = .loading
@@ -131,6 +135,7 @@ class CryptoViewModel: ObservableObject {
         updateFavoriteStatus()
         filterCryptos()
     }
+    
 }
 
 //Posible improvement -> Move to Enums folder
