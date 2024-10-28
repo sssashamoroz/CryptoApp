@@ -8,11 +8,7 @@
 import Foundation
 import CoreData
 
-protocol CryptoRepositoryProtocol {
-    func fetchCryptos() async throws -> [Crypto]
-}
-
-final class CryptoRepository: CryptoRepositoryProtocol {
+final class CryptoRepository {
     
     private let service: CryptoAPIService
     private let coreDataStack: CoreDataStack
@@ -22,47 +18,115 @@ final class CryptoRepository: CryptoRepositoryProtocol {
         self.coreDataStack = stack
     }
     
-    // Fetch cryptos, prioritize cached data, fall back to API if not present
-    func fetchCryptos() async throws -> [Crypto] {
-        do {
-            // Try to load cached cryptos from Core Data
-            let cachedCryptos = try loadCachedCryptos()
-            if !cachedCryptos.isEmpty {
-                return cachedCryptos.map { mapEntityToModel($0) }
-            } else {
-                // No cached data, fetch from API
-                let cryptos = try await service.fetchCryptos()
-                await saveToCoreData(cryptos)
-                return cryptos
-            }
-        } catch {
-            print("Error fetching cryptos: \(error.localizedDescription)")
-            throw error
+    // Fetch cryptos from API or cache
+    func fetchCryptos(forceRefresh: Bool = false) async throws -> [Crypto] {
+        if forceRefresh {
+            let cryptos = try await service.fetchCryptos()
+            await saveOrUpdateCryptos(cryptos)
+            return cryptos
         }
+
+        let cachedCryptos = try loadCachedCryptos()
+        return cachedCryptos.isEmpty ? try await refreshCryptos() : cachedCryptos.map { mapEntityToModel($0) }
+    }
+    
+    // Refresh cryptos by fetching from API and saving to Core Data
+    func refreshCryptos() async throws -> [Crypto] {
+        let cryptos = try await service.fetchCryptos()
+        await saveOrUpdateCryptos(cryptos)
+        return cryptos
+    }
+
+    // Toggle favorite status by adding or removing FavoriteCrypto entity
+    func toggleFavoriteStatus(for cryptoID: String) async {
+        let context = coreDataStack.viewContext
+        let request: NSFetchRequest<FavoriteCrypto> = FavoriteCrypto.fetchRequest()
+        request.predicate = NSPredicate(format: "crypto.id == %@", cryptoID)
+
+        context.performAndWait {
+            do {
+                if let favorite = try context.fetch(request).first {
+                    context.delete(favorite) // Remove favorite if it exists
+                } else if let cryptoEntity = fetchCryptoEntity(for: cryptoID) {
+                    let newFavorite = FavoriteCrypto(context: context)
+                    newFavorite.crypto = cryptoEntity
+                    newFavorite.dateAdded = Date()
+                }
+                try context.save()
+            } catch {
+                print("Failed to toggle favorite status: \(error)")
+            }
+        }
+    }
+
+    // Fetch all favorite crypto IDs from FavoriteCrypto entities, sorted by dateAdded
+    func fetchFavorites() async -> [String] {
+        let request: NSFetchRequest<FavoriteCrypto> = FavoriteCrypto.fetchRequest()
+        
+        // Sort by dateAdded in descending order (newest first)
+        request.sortDescriptors = [NSSortDescriptor(key: "dateAdded", ascending: false)]
+        
+        let favorites = (try? coreDataStack.viewContext.fetch(request)) ?? []
+        
+        // Map to crypto IDs
+        return favorites.compactMap { $0.crypto?.id }
     }
 
     // MARK: - Private Helper Methods
 
-    // Load cached cryptos from Core Data
+    private func fetchCryptoEntity(for cryptoID: String) -> CryptoEntity? {
+        let request: NSFetchRequest<CryptoEntity> = CryptoEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", cryptoID)
+        return (try? coreDataStack.viewContext.fetch(request))?.first
+    }
+
     private func loadCachedCryptos() throws -> [CryptoEntity] {
         let request: NSFetchRequest<CryptoEntity> = CryptoEntity.fetchRequest()
         return try coreDataStack.viewContext.fetch(request)
     }
 
-    // Save newly fetched cryptos to Core Data
-    private func saveToCoreData(_ cryptos: [Crypto]) async {
+    private func saveOrUpdateCryptos(_ cryptos: [Crypto]) async {
         let context = coreDataStack.viewContext
+        let existingCryptoMap = Dictionary(uniqueKeysWithValues: (try? loadCachedCryptos().map { ($0.id ?? "", $0) }) ?? [])
+
         await context.perform {
             for crypto in cryptos {
-                let cryptoEntity = CryptoEntity(context: context)
-                self.mapModelToEntity(crypto, cryptoEntity)
+                if let existingCrypto = existingCryptoMap[crypto.id] {
+                    self.updateCryptoEntity(existingCrypto, with: crypto)
+                } else {
+                    let newCryptoEntity = CryptoEntity(context: context)
+                    self.mapModelToEntity(crypto, newCryptoEntity)
+                }
             }
-            do {
-                try context.save()
-            } catch {
-                print("Error saving to Core Data: \(error.localizedDescription)")
-            }
+            try? context.save()
         }
+    }
+
+    // Helper function to update an existing CryptoEntity without changing isFavorite
+    private func updateCryptoEntity(_ cryptoEntity: CryptoEntity, with crypto: Crypto) {
+        cryptoEntity.id = crypto.id
+        cryptoEntity.symbol = crypto.symbol
+        cryptoEntity.name = crypto.name
+        cryptoEntity.imageURL = crypto.imageURL
+        cryptoEntity.currentPrice = crypto.currentPrice ?? 0
+        cryptoEntity.marketCap = crypto.marketCap ?? 0
+        cryptoEntity.totalVolume = crypto.totalVolume ?? 0
+        cryptoEntity.high24h = crypto.high24h ?? 0
+        cryptoEntity.low24h = crypto.low24h ?? 0
+        cryptoEntity.priceChange24h = crypto.priceChange24h ?? 0
+        cryptoEntity.lastUpdated = crypto.lastUpdated
+        cryptoEntity.marketCapRank = crypto.marketCapRank ?? 0
+        cryptoEntity.marketCapChange24h = crypto.marketCapChange24h ?? 0
+        cryptoEntity.marketCapChangePercentage24h = crypto.marketCapChangePercentage24h ?? 0
+        cryptoEntity.totalSupply = crypto.totalSupply ?? 0
+        cryptoEntity.maxSupply = crypto.maxSupply ?? 0
+        cryptoEntity.ath = crypto.ath ?? 0
+        cryptoEntity.athChangePercentage = crypto.athChangePercentage ?? 0
+        cryptoEntity.athDate = crypto.athDate
+        cryptoEntity.atl = crypto.atl ?? 0
+        cryptoEntity.atlChangePercentage = crypto.atlChangePercentage ?? 0
+        cryptoEntity.atlDate = crypto.atlDate
+        cryptoEntity.isFavorite = crypto.isFavorite
     }
 
     // MARK: - Mapping Functions
@@ -73,14 +137,25 @@ final class CryptoRepository: CryptoRepositoryProtocol {
         cryptoEntity.symbol = crypto.symbol
         cryptoEntity.name = crypto.name
         cryptoEntity.imageURL = crypto.imageURL
-        cryptoEntity.currentPrice = crypto.currentPrice
-        cryptoEntity.marketCap = crypto.marketCap
-        cryptoEntity.totalVolume = crypto.totalVolume
-        cryptoEntity.high24h = crypto.high24h
-        cryptoEntity.low24h = crypto.low24h
-        cryptoEntity.priceChange24h = crypto.priceChange24h
-        cryptoEntity.lastUpdated = crypto.lastUpdated
-        cryptoEntity.isFavorite = false // Default, can be set elsewhere if needed
+        cryptoEntity.currentPrice = crypto.currentPrice ?? 0
+        cryptoEntity.marketCap = crypto.marketCap ?? 0
+        cryptoEntity.totalVolume = crypto.totalVolume ?? 0
+        cryptoEntity.high24h = crypto.high24h ?? 0
+        cryptoEntity.low24h = crypto.low24h ?? 0
+        cryptoEntity.priceChange24h = crypto.priceChange24h ?? 0
+        cryptoEntity.lastUpdated = crypto.lastUpdated ?? "NODATE"
+        cryptoEntity.marketCapRank = crypto.marketCapRank ?? 9999
+        cryptoEntity.marketCapChange24h = crypto.marketCapChange24h ?? 0
+        cryptoEntity.marketCapChangePercentage24h = crypto.marketCapChangePercentage24h ?? 0
+        cryptoEntity.totalSupply = crypto.totalSupply ?? 0
+        cryptoEntity.maxSupply = crypto.maxSupply ?? 0
+        cryptoEntity.ath = crypto.ath ?? 0
+        cryptoEntity.athChangePercentage = crypto.athChangePercentage ?? 0
+        cryptoEntity.athDate = crypto.athDate
+        cryptoEntity.atl = crypto.atl ?? 0
+        cryptoEntity.atlChangePercentage = crypto.atlChangePercentage ?? 0
+        cryptoEntity.atlDate = crypto.atlDate
+        cryptoEntity.isFavorite = crypto.isFavorite
     }
 
     // Map Core Data entity to Crypto model
@@ -97,10 +172,18 @@ final class CryptoRepository: CryptoRepositoryProtocol {
             high24h: cryptoEntity.high24h,
             low24h: cryptoEntity.low24h,
             priceChange24h: cryptoEntity.priceChange24h,
-            lastUpdated: cryptoEntity.lastUpdated ?? Date(),
+            lastUpdated: cryptoEntity.lastUpdated ?? "NODATE",
             marketCapChange24h: cryptoEntity.marketCapChange24h,
             marketCapChangePercentage24h: cryptoEntity.marketCapChangePercentage24h,
-            totalSupply: cryptoEntity.totalSupply
+            totalSupply: cryptoEntity.totalSupply,
+            maxSupply: cryptoEntity.maxSupply,
+            ath: cryptoEntity.ath,
+            athChangePercentage: cryptoEntity.athChangePercentage,
+            athDate: cryptoEntity.athDate ?? Date(),
+            atl: cryptoEntity.atl,
+            atlChangePercentage: cryptoEntity.atlChangePercentage,
+            atlDate: cryptoEntity.atlDate ?? Date(),
+            isFavorite: cryptoEntity.isFavorite
         )
     }
 }

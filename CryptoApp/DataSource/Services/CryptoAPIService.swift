@@ -21,34 +21,40 @@ final class CryptoAPIService {
 //        self.session = session
 //    }
 //    
-    //Fetch Data Method
     func fetchCryptos(limit: Int = 20) async throws -> [Crypto] {
-        
-        // Construct the URL for fetching the crypto data
+                
         let urlString = "\(baseURL)\(currencyQuery)&per_page=\(limit)"
+        
         guard let url = URL(string: urlString) else {
             throw CryptoAPIError.invalidURL
         }
-        
         // Perform the async network request
         let (data, response) = try await URLSession.shared.data(from: url)
-        
+
         // Check if the response is valid and has status code 200 (OK)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            print("Invalid response: \(response)")
             throw CryptoAPIError.invalidResponse
         }
-        
+
         // Decode the data into [Crypto] model
         do {
             let cryptos = try JSONDecoder().decode([Crypto].self, from: data)
+            print("✅ Successfully fetched and decoded cryptos from API.")
+            
+            for crypto in cryptos {
+                print("Fetched Crypto: \(crypto.id), Last Updated: \(String(describing: crypto.lastUpdated))")
+            }
             return cryptos
-        } catch {
+        } catch let decodingError {
+            print("Decoding failed with error: \(decodingError)")
             throw CryptoAPIError.decodingFailed
         }
+        
+
     }
 }
 
-// MARK: - Error Handling
 enum CryptoAPIError: Error {
     case invalidURL
     case invalidResponse

@@ -9,9 +9,14 @@ import SwiftUI
 
 @main
 struct CryptoAppApp: App {
+    
+    @StateObject private var viewModel = CryptoViewModel()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainView()
+                .environmentObject(viewModel)
+
         }
     }
 }
