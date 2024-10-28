@@ -21,6 +21,7 @@ struct CryptoRowView: View {
     @State private var loadAttempts = 0 // Track image load attempts
     
     
+    
     var body: some View {
         HStack {
             
@@ -64,11 +65,15 @@ struct CryptoRowView: View {
                                     .foregroundColor(.gray)
                             )
                             .onAppear {
-                                if loadAttempts < 5 { // Limit retry attempts
+                                // Retry loading only if online and under retry limit
+                                if loadAttempts < 5, NetworkMonitor.shared.isConnected {
                                     loadAttempts += 1
-                                    // Retry with a cache-busting query string
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                        imageURL = URL(string: "\(crypto.imageURL ?? "")?\(UUID().uuidString)")
+                                        if let validImageURL = crypto.imageURL, !validImageURL.isEmpty {
+                                            imageURL = URL(string: "\(validImageURL)?\(UUID().uuidString)")
+                                        } else {
+                                            imageURL = nil
+                                        }
                                     }
                                 }
                             }

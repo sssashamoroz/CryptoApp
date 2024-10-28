@@ -64,6 +64,7 @@ struct MainView: View {
                                 .frame(width: 5)
                                 .offset(x: -5, y: -2)
                         }
+                        .transition(.opacity.animation(.snappy.delay(1)))
                     }
     
 
